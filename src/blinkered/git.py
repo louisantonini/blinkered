@@ -3,6 +3,9 @@ import subprocess
 from pathlib import Path
 
 
+MINIMUM_VERSION = (2, 35)
+
+
 class GitError(RuntimeError):
     pass
 
@@ -13,6 +16,20 @@ def run(root: Path, *args: str, check: bool = True) -> str:
     if check and result.returncode:
         raise GitError(result.stderr.strip() or f'git {args[0]} failed')
     return result.stdout
+
+
+def parse_version(text: str) -> tuple[int, ...]:
+    """(major, minor, patch) from `git version` output, e.g. `git version 2.50.1 (Apple Git-155)`."""
+    number = text.split()[2]
+    return tuple(int(part) for part in number.split('.')[:3] if part.isdigit())
+
+
+def require_version(root: Path) -> None:
+    version = parse_version(run(root, 'version'))
+    if version < MINIMUM_VERSION:
+        found = '.'.join(map(str, version))
+        needed = '.'.join(map(str, MINIMUM_VERSION))
+        raise GitError(f'git {needed} or later required, found {found}')
 
 
 def repo_root(start: Path) -> Path:

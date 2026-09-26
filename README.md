@@ -4,6 +4,10 @@ Work on one node of a repository while the working tree shows only its dependenc
 
 Each node is a directory with a `blinkered.toml` manifest declaring free-form tags and edges to other nodes. `blinkered workspace <node>` narrows the working tree, through git's cone-mode sparse checkout, to that node and everything it depends on. The graph can grow arbitrarily large and deep while each piece of work stays small.
 
+## Requirements
+
+Python 3.11 or later and git 2.35 or later. Tested with git 2.50.
+
 ## Usage
 
 ```toml
@@ -32,7 +36,7 @@ blinkered workspace           # resync the stored focus
 blinkered workspace --all     # restore the full working tree
 ```
 
-See [SPEC.md](SPEC.md) for the model, layout rules and full behaviour.
+See [SPEC.md](https://github.com/louisantonini/blinkered/blob/main/SPEC.md) for the model, layout rules and full behaviour.
 
 ## Scope
 

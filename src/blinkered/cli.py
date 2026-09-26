@@ -163,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == 'workspace' and args.all and args.node:
         parser().error('workspace: give a node or --all, not both')
     try:
+        git.require_version(Path.cwd())
         root = git.repo_root(Path.cwd())
         config = configuration.load(root)
         from .manifest import discover

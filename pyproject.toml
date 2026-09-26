@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -8,7 +8,24 @@ version = "0.0.1"
 description = "Work on one node of a repository while the working tree shows only its dependency closure."
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Louis Antonini" }]
+keywords = ["git", "sparse-checkout", "monorepo", "dependency-graph", "workspace"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Software Development :: Version Control :: Git",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/louisantonini/blinkered"
+Repository = "https://github.com/louisantonini/blinkered"
+Issues = "https://github.com/louisantonini/blinkered/issues"
 
 [project.scripts]
 blinkered = "blinkered.cli:main"
