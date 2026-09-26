@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "blinkered"
+version = "0.0.1"
+description = "Work on one node of a repository while the working tree shows only its dependency closure."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+blinkered = "blinkered.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
