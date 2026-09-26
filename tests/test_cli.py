@@ -4,10 +4,10 @@ from blinkered.cli import parser
 
 
 def test_closure_arguments():
-    args = parser().parse_args(['closure', 'pdr_high', '--via', 'defined_on,uses', '--tag', 'measurement'])
-    assert args.node == 'pdr_high'
-    assert args.via == ['defined_on', 'uses']
-    assert args.tag == ['measurement']
+    args = parser().parse_args(['closure', 'selection', '--via', 'reads,uses', '--tag', 'transform'])
+    assert args.node == 'selection'
+    assert args.via == ['reads', 'uses']
+    assert args.tag == ['transform']
 
 
 def test_workspace_without_node_resyncs():

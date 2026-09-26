@@ -1,8 +1,14 @@
 """Command-line entry point."""
 import argparse
+import posixpath
 import sys
+from collections import Counter
+from pathlib import Path
 
 import blinkered
+from . import checks, config as configuration, git, state
+from .config import FILENAME
+from .graph import closure
 
 
 def csv(value: str) -> list[str]:
@@ -33,9 +39,135 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+class Failure(Exception):
+    pass
+
+
+def report(title, findings):
+    print(title, file=sys.stderr)
+    for finding in findings:
+        print(f'  {finding}', file=sys.stderr)
+
+
+def view(nodes, config, focus):
+    if focus not in nodes:
+        raise Failure(f'unknown node: {focus}')
+    return sorted({nodes[name].directory for name in closure(nodes, focus)} | set(config.always))
+
+
+def run_closure(root, config, nodes, errors, args):
+    if args.node not in nodes:
+        raise Failure(f'unknown node: {args.node}')
+    print('\n'.join(closure(nodes, args.node, via=args.via, tags=args.tag)))
+    return 0
+
+
+def run_workspace(root, config, nodes, errors, args):
+    if args.all:
+        if git.sparse_patterns(root) is not None:
+            git.sparse_disable(root)
+        state.write_focus(root, None)
+        print('full working tree')
+        return 0
+    focus = args.node or state.read_focus(root)
+    if focus is None:
+        raise Failure('no focus: give a node')
+    blocking = list(errors) + checks.layout(root, config, nodes)
+    if blocking:
+        report('refusing: fix these first (blinkered check)', blocking)
+        return 1
+    keep = view(nodes, config, focus)
+    work, ignored = checks.leaving(root, keep)
+    if work or (ignored and not args.force):
+        report('refusing: these paths would leave the view', work + ignored)
+        if ignored and not work:
+            print('ignored files only: rerun with --force to delete them', file=sys.stderr)
+        return 1
+    git.sparse_set(root, keep)
+    state.write_focus(root, focus)
+    print(f'focus: {focus}')
+    print('\n'.join(f'  {d}' for d in keep))
+    return 0
+
+
+def run_status(root, config, nodes, errors, args):
+    focus = state.read_focus(root)
+    current = git.sparse_patterns(root)
+    if focus is None:
+        print('focus: none')
+        print('view: full' if current is None else f'view: sparse, {len(current)} directories')
+        return 0 if current is None else 1
+    expected = set(view(nodes, config, focus))
+    current = set(current or [])
+    missing, extra = sorted(expected - current), sorted(current - expected)
+    leaked = checks.leaks(root, sorted(current)) if current else []
+    print(f'focus: {focus}')
+    for label, items in (('missing', missing), ('extra', extra)):
+        for item in items:
+            print(f'{label}: {item}')
+    for finding in leaked:
+        print(f'leak: {finding.path} ({finding.message})')
+    if missing or extra or leaked:
+        print('→ run `blinkered workspace` to resync' if missing or extra else '→ resolve leaks')
+        return 1
+    print('in sync')
+    return 0
+
+
+def run_new(root, config, nodes, errors, args):
+    directory = (Path.cwd() / args.directory).resolve().relative_to(root.resolve()).as_posix()
+    name = posixpath.basename(directory)
+    if directory in ('', '.'):
+        raise Failure('the repository root cannot be a node')
+    if name in nodes:
+        raise Failure(f'node {name} already exists at {nodes[name].directory}')
+    for node in nodes.values():
+        if directory.startswith(node.directory + '/'):
+            raise Failure(f'inside node {node.name}')
+        if node.directory.startswith(directory + '/'):
+            raise Failure(f'would contain node {node.name}')
+    path = root / directory
+    path.mkdir(parents=True, exist_ok=True)
+    (path / FILENAME).write_text('tags = []\n\n[edges]\n')
+    if git.sparse_patterns(root) is not None:
+        git.sparse_add(root, [directory])
+    print(f'created {directory}/{FILENAME}')
+    return 0
+
+
+def run_tags(root, config, nodes, errors, args):
+    tags = Counter(tag for node in nodes.values() for tag in node.tags)
+    kinds = Counter(kind for node in nodes.values() for kind, targets in node.edges.items()
+                    for _ in targets)
+    for title, counts in (('tags', tags), ('edge kinds', kinds)):
+        print(f'{title}:')
+        for item, count in counts.most_common():
+            print(f'  {count:>4}  {item}')
+    return 0
+
+
+def run_check(root, config, nodes, errors, args):
+    findings = checks.check(root, config, nodes, errors)
+    for finding in findings:
+        print(finding)
+    print(f'{len(nodes)} nodes, {len(findings)} findings')
+    return 1 if findings else 0
+
+
+COMMANDS = {'closure': run_closure, 'workspace': run_workspace, 'status': run_status,
+            'new': run_new, 'tags': run_tags, 'check': run_check}
+
+
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.command == 'workspace' and args.all and args.node:
         parser().error('workspace: give a node or --all, not both')
-    print(f'blinkered {args.command}: not implemented', file=sys.stderr)
-    return 2
+    try:
+        root = git.repo_root(Path.cwd())
+        config = configuration.load(root)
+        from .manifest import discover
+        nodes, errors = discover(root)
+        return COMMANDS[args.command](root, config, nodes, errors, args)
+    except (Failure, git.GitError, configuration.NotManaged, ValueError) as error:
+        print(f'blinkered: {error}', file=sys.stderr)
+        return 2

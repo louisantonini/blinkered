@@ -13,12 +13,12 @@ Standalone command-line tool, installed outside the repositories it manages (`pi
 
 ```toml
 # blinkered.toml (in a node directory)
-tags = ["measurement"]
+tags = ["transform"]
 
 [edges]
-defined_on = ["pdr_high"]
-computed_from = ["agv"]
-uses = ["research"]
+reads = ["selection"]
+joins = ["lookup"]
+uses = ["utils"]
 ```
 
 - Manifests are read from the working tree when present, otherwise from the index, so nodes outside the view remain part of the graph.
@@ -64,11 +64,9 @@ python_imports = true             # code imports must be covered by declared edg
 - **Leaks**: files git keeps on disk outside the cone (modifications, untracked, conflicts) are reported by `status`, not hidden.
 - **Remote**: pulls update content within the view but not the pattern set; `status` detects drift, `workspace` resyncs.
 
-## Non-goals
+## Git behaviour (git 2.50.1, Python 3.12, pytest 9)
 
-Tests, git hooks, worktrees, data caching, execution of nodes.
-
-## Validated (git 2.50.1, Python 3.12, pytest 9)
+Observed behaviour the guards are built on.
 
 Narrowing (`git sparse-checkout set`) always exits 0; the tool must do its own checks.
 
@@ -90,8 +88,3 @@ Narrowing (`git sparse-checkout set`) always exits 0; the tool must do its own c
 - pytest: whole-tree runs collect only tests in view; an explicit path outside the view errors with "file or directory not found".
 
 Consequences for the clean-state rule: refuse narrowing when any modified, staged, untracked or ignored path would leave the view; ignored paths are the only case of silent loss.
-
-## To validate
-
-- Editor behaviour in a partial tree (not testable from the shell).
-- First real use: a research chain in quant-research (grid → eligibility → RVBR → PDR → pdr_high → agv_rank_pdr_high).
