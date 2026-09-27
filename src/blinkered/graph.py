@@ -45,10 +45,12 @@ def targets(nodes: dict[str, Node], id: str, *, via=None, index=None) -> list[st
 
 
 def closure(nodes: dict[str, Node], start: str, *, via: Iterable[str] | None = None,
-            tags: Iterable[str] | None = None) -> list[str]:
+            tags: Iterable[str] | None = None,
+            exclude_tags: Iterable[str] | None = None) -> list[str]:
     """`start` and its transitive dependencies, as ids.
 
-    `via` restricts the edge kinds followed; `tags` filters the output without stopping traversal.
+    `via` restricts the edge kinds followed; `tags` and `exclude_tags` filter the output without
+    stopping traversal.
     """
     index = shorts(nodes)
     start = resolve(nodes, start, index)
@@ -59,10 +61,10 @@ def closure(nodes: dict[str, Node], start: str, *, via: Iterable[str] | None = N
             if target not in seen:
                 seen.append(target)
                 queue.append(target)
-    if tags is None:
-        return seen
-    tags = set(tags)
-    return [id for id in seen if tags & set(nodes[id].tags)]
+    tags = None if tags is None else set(tags)
+    exclude_tags = set(exclude_tags or ())
+    return [id for id in seen
+            if (tags is None or tags & set(nodes[id].tags)) and not exclude_tags & set(nodes[id].tags)]
 
 
 def cycles(nodes: dict[str, Node]) -> list[list[str]]:

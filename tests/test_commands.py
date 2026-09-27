@@ -286,3 +286,9 @@ def test_graph_closure_filters_and_indent(blinkered):
 def test_graph_of_unknown_node_fails(blinkered):
     code, _, err = blinkered('graph', 'missing')
     assert code == 2 and 'unknown node missing' in err
+
+
+def test_closure_exclude_tag(blinkered):
+    code, out, _ = blinkered('closure', 'report', '--exclude-tag', 'transform,infra')
+    assert code == 0
+    assert set(lines(out)) == {'selection', 'subset', 'source'}

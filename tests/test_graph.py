@@ -95,3 +95,10 @@ def test_export_tag_filters_drop_edges_to_hidden_nodes():
 def test_export_omits_unresolved_references():
     nodes = {n.id: n for n in [node('a', uses=['ghost', 'b']), node('b')]}
     assert edge_set(export(nodes)) == {('a', 'b', 'uses')}
+
+
+def test_exclude_tags_filters_output_without_stopping_traversal():
+    # lib is reached through lookup; source through the excluded transforms
+    result = closure(NODES, 'report', exclude_tags=['transform'])
+    assert set(result) == {'selection', 'source', 'lib'}
+    assert set(closure(NODES, 'report', tags=['dataset', 'infra'], exclude_tags=['infra'])) == {'selection', 'source'}

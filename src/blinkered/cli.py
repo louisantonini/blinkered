@@ -24,6 +24,7 @@ def parser() -> argparse.ArgumentParser:
     closure.add_argument('node')
     closure.add_argument('--via', type=csv, help='edge kinds to follow, comma-separated')
     closure.add_argument('--tag', type=csv, help='output only nodes with these tags')
+    closure.add_argument('--exclude-tag', type=csv, help='omit nodes with these tags from the output')
 
     workspace = commands.add_parser('workspace', help='narrow the working tree to a closure')
     workspace.add_argument('node', nargs='?', help='new focus; omit to resync the stored focus')
@@ -70,7 +71,8 @@ def view(nodes, config, focus):
 
 
 def run_closure(root, config, nodes, errors, args):
-    print('\n'.join(closure(nodes, find(nodes, args.node), via=args.via, tags=args.tag)))
+    print('\n'.join(closure(nodes, find(nodes, args.node), via=args.via, tags=args.tag,
+                            exclude_tags=args.exclude_tag)))
     return 0
 
 
