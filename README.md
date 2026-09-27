@@ -38,8 +38,10 @@ joins = ["lookup"]
 blinkered check               # validate manifests, graph and layout
 blinkered closure report      # report and its transitive dependencies
 blinkered workspace report    # narrow the working tree to that closure
+blinkered workspace a b       # union of several closures
+blinkered workspace --exclude-tag legacy   # everything except legacy nodes
 blinkered status              # compare the view with the closure after pulls or edits
-blinkered workspace           # resync the stored focus
+blinkered workspace           # resync the stored selection
 blinkered workspace --all     # restore the full working tree
 blinkered graph               # nodes and edges as JSON
 ```

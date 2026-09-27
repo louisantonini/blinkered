@@ -292,3 +292,66 @@ def test_closure_exclude_tag(blinkered):
     code, out, _ = blinkered('closure', 'report', '--exclude-tag', 'transform,infra')
     assert code == 0
     assert set(lines(out)) == {'selection', 'subset', 'source'}
+
+
+# Multiple foci and tag selections
+
+
+def test_multiple_foci_view_the_union_of_closures(repo, blinkered):
+    code, out, _ = blinkered('workspace', 'feature_b', 'lookup')
+    assert code == 0 and 'focus: feature_b, lookup' in out
+    assert on_disk(repo, 'feature_b') and on_disk(repo, 'lookup') and on_disk(repo, 'subset')
+    assert not on_disk(repo, 'report') and not on_disk(repo, 'feature_a')
+    assert 'in sync' in blinkered('status')[1]
+
+
+def test_tag_selection_focuses_on_tagged_nodes(repo, blinkered):
+    code, out, _ = blinkered('workspace', '--tag', 'dataset')
+    assert code == 0 and 'focus: tagged dataset' in out
+    # selection derives from feature_a, so feature_a stays in view; report and lookup go
+    assert on_disk(repo, 'selection') and on_disk(repo, 'feature_a')
+    assert not on_disk(repo, 'report') and not on_disk(repo, 'lookup')
+
+
+def test_excluding_leaves_out_unneeded_nodes(repo, blinkered):
+    tag(repo, 'feature_b', 'legacy')
+    code, out, _ = blinkered('workspace', '--exclude-tag', 'legacy')
+    assert code == 0 and 'focus: all except tagged legacy' in out
+    assert not on_disk(repo, 'feature_b') and on_disk(repo, 'report')
+    code, out, _ = blinkered('status')
+    assert code == 0 and 'in sync' in out
+    code, out, _ = blinkered('workspace')  # resync from the stored selection
+    assert code == 0 and 'focus: all except tagged legacy' in out
+
+
+def test_excluding_a_needed_node_is_refused(repo, blinkered):
+    code, _, err = blinkered('workspace', '--exclude-tag', 'infra')
+    assert code == 1 and 'excluded nodes are needed' in err
+    assert 'utils (infra) ← needed by' in err and '--force' in err
+    assert on_disk(repo, 'utils')
+
+
+def test_forced_exclusion_removes_needed_nodes_and_status_reports_it(repo, blinkered):
+    code, out, _ = blinkered('workspace', '--exclude-tag', 'infra', '--force')
+    assert code == 0 and 'excluded although needed' in out
+    assert not on_disk(repo, 'utils')
+    code, out, _ = blinkered('status')
+    assert code == 0 and 'broken: utils excluded but needed by' in out
+
+
+def test_single_focus_state_from_earlier_versions_still_resyncs(repo, blinkered):
+    blinkered('workspace', 'feature_a')
+    (repo / '.git' / 'blinkered' / 'focus').write_text('feature_a\n')
+    code, out, _ = blinkered('workspace')
+    assert code == 0 and 'focus: feature_a' in out
+
+
+def test_all_rejects_foci(blinkered):
+    with pytest.raises(SystemExit):
+        blinkered('workspace', '--all', '--exclude-tag', 'legacy')
+
+
+def tag(repo, node, name):
+    path = repo / 'src' / 'nodes' / node / 'blinkered.toml'
+    path.write_text(path.read_text().replace('tags = [', f'tags = ["{name}", ', 1).replace(', ]', ']'))
+    git(repo, 'commit', '-q', '-am', f'tag {node}')

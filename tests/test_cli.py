@@ -14,7 +14,7 @@ def test_closure_arguments():
 
 def test_workspace_without_node_resyncs():
     args = parser().parse_args(['workspace'])
-    assert args.node is None and not args.all
+    assert args.nodes == [] and args.tag is None and args.exclude_tag is None and not args.all
 
 
 def test_unknown_command_rejected():

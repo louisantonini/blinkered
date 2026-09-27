@@ -53,8 +53,8 @@ python_imports = true             # code imports must be covered by declared edg
 | Command | Behaviour |
 | --- | --- |
 | `blinkered closure <node> [--via kinds] [--tag tags] [--exclude-tag tags]` | Node and its transitive dependencies. |
-| `blinkered workspace [<node>]` | Store focus; set cone-mode sparse checkout to the closure's directories plus `always`. Without `<node>`, resync the stored focus. |
-| `blinkered workspace --all` | Disable sparse checkout; clear focus. |
+| `blinkered workspace [<node> ...] [--tag tags] [--exclude-tag tags] [--force]` | Store the selection; set cone-mode sparse checkout to the union of the foci's closures plus `always`. Without arguments, resync the stored selection. |
+| `blinkered workspace --all` | Disable sparse checkout; clear the selection. |
 | `blinkered status` | Compare view with closure of the stored focus: missing, extra, leaks. Read-only; non-zero exit if out of sync. |
 | `blinkered new <node>` | Create directory and `blinkered.toml`; add it to the current view. Refuses inside a node. |
 | `blinkered graph [<node>] [--via kinds] [--tag tags] [--exclude-tag tags] [--indent n]` | Emit nodes and resolved edges as JSON; with `<node>`, only its closure. |
@@ -72,9 +72,11 @@ python_imports = true             # code imports must be covered by declared edg
  "edges": [{"source": "rvbr/gbs", "target": "rvbr/population", "kind": "defined_on"}]}
 ```
 
-- **State**: the focus node name only, stored under `.git/blinkered/`. Patterns are always recomputed from manifests.
+- **Selection**: foci are the given nodes plus, when `--tag` or `--exclude-tag` is given, every node with (`--tag`) and without (`--exclude-tag`) those tags; `--exclude-tag` alone selects every node without them. The view is the union of the foci's closures, which is always closed under dependencies.
+- **Exclusion conflicts**: a node with an excluded tag that a kept focus needs. Without `--force`, `workspace` refuses and lists each conflict with the foci needing it; with `--force`, the excluded nodes leave the view anyway and their dependants may break. `status` reports forced conflicts as `broken`.
+- **State**: the selection (nodes, tags, excluded tags, force), stored under `.git/blinkered/`; a single node name written by earlier versions is still read. Patterns are always recomputed from manifests, so a resync picks up nodes newly matching the tags.
 - **Guard**: `workspace` and `new` run `check` first and refuse on layout violations.
-- **Clean-state rule**: before narrowing, list modified, staged, untracked or ignored paths leaving the view; refuse unless resolved, or `--force` for ignored-only paths.
+- **Clean-state rule**: before narrowing, list modified, staged, untracked or ignored paths leaving the view; refuse unless resolved, or `--force` for ignored-only paths. `--force` overrides refusals; it never overrides uncommitted work.
 - **Leaks**: files git keeps on disk outside the cone (modifications, untracked, conflicts) are reported by `status`, not hidden.
 - **Remote**: pulls update content within the view but not the pattern set; `status` detects drift, `workspace` resyncs.
 
