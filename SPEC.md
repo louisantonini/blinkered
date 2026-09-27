@@ -57,12 +57,21 @@ python_imports = true             # code imports must be covered by declared edg
 | `blinkered workspace --all` | Disable sparse checkout; clear focus. |
 | `blinkered status` | Compare view with closure of the stored focus: missing, extra, leaks. Read-only; non-zero exit if out of sync. |
 | `blinkered new <node>` | Create directory and `blinkered.toml`; add it to the current view. Refuses inside a node. |
+| `blinkered graph [<node>] [--via kinds] [--tag tags] [--exclude-tag tags] [--indent n]` | Emit nodes and resolved edges as JSON; with `<node>`, only its closure. |
 | `blinkered tags` | List tags and edge kinds in use, with counts. |
 | `blinkered check` | Report manifest errors, unknown or ambiguous targets, cycles, layout-rule violations and plugin findings. |
 
 ## Behaviour
 
 - **Closure**: start at the node, follow outgoing edges to their targets, repeat until no new node is reached. Manifests come from the working tree or the index, so the result is independent of the current view. Output: one full id per line. `--via` follows only the listed edge kinds; `--tag` filters the output to nodes with those tags without stopping traversal. Read-only; `workspace` uses the same computation.
+- **Graph**: one neutral format, JSON; displaying it is up to the user. Nodes are selected by the closure of `<node>` (along `--via`) or all nodes, then filtered by `--tag`/`--exclude-tag`; an edge is emitted when its kind passes `--via` and both ends are emitted. Edges use full ids; unresolved references are omitted (`check` reports them). Output is sorted and compact unless `--indent` is given.
+
+```json
+{"version": 1,
+ "nodes": [{"id": "rvbr/gbs", "directory": "src/rvbr/gbs", "tags": []}],
+ "edges": [{"source": "rvbr/gbs", "target": "rvbr/population", "kind": "defined_on"}]}
+```
+
 - **State**: the focus node name only, stored under `.git/blinkered/`. Patterns are always recomputed from manifests.
 - **Guard**: `workspace` and `new` run `check` first and refuse on layout violations.
 - **Clean-state rule**: before narrowing, list modified, staged, untracked or ignored paths leaving the view; refuse unless resolved, or `--force` for ignored-only paths.

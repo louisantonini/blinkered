@@ -1,5 +1,6 @@
 """Command-line entry point."""
 import argparse
+import json
 import sys
 from collections import Counter
 from pathlib import Path
@@ -8,7 +9,7 @@ import blinkered
 from . import checks, config as configuration, git, state
 from .config import FILENAME
 from .manifest import discover, node_id
-from .graph import Unresolved, closure, resolve
+from .graph import Unresolved, closure, export, resolve
 
 
 def csv(value: str) -> list[str]:
@@ -33,6 +34,13 @@ def parser() -> argparse.ArgumentParser:
 
     new = commands.add_parser('new', help='create a node and add it to the view')
     new.add_argument('directory')
+
+    graph = commands.add_parser('graph', help='nodes and edges as JSON')
+    graph.add_argument('node', nargs='?', help='restrict to the closure of this node')
+    graph.add_argument('--via', type=csv, help='edge kinds to follow and emit, comma-separated')
+    graph.add_argument('--tag', type=csv, help='emit only nodes with these tags')
+    graph.add_argument('--exclude-tag', type=csv, help='omit nodes with these tags')
+    graph.add_argument('--indent', type=int, help='pretty-print with this indent')
 
     commands.add_parser('tags', help='tags and edge kinds in use, with counts')
     commands.add_parser('check', help='manifest, graph and layout validation')
@@ -142,6 +150,14 @@ def run_new(root, config, nodes, errors, args):
     return 0
 
 
+def run_graph(root, config, nodes, errors, args):
+    start = None if args.node is None else find(nodes, args.node)
+    data = export(nodes, start, via=args.via, tags=args.tag, exclude_tags=args.exclude_tag)
+    separators = (',', ':') if args.indent is None else None
+    print(json.dumps(data, indent=args.indent, separators=separators, ensure_ascii=False))
+    return 0
+
+
 def run_tags(root, config, nodes, errors, args):
     tags = Counter(tag for node in nodes.values() for tag in node.tags)
     kinds = Counter(kind for node in nodes.values() for kind, targets in node.edges.items()
@@ -162,7 +178,7 @@ def run_check(root, config, nodes, errors, args):
 
 
 COMMANDS = {'closure': run_closure, 'workspace': run_workspace, 'status': run_status,
-            'new': run_new, 'tags': run_tags, 'check': run_check}
+            'new': run_new, 'graph': run_graph, 'tags': run_tags, 'check': run_check}
 
 
 def main(argv: list[str] | None = None) -> int:

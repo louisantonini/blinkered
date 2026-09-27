@@ -19,7 +19,7 @@ def test_workspace_without_node_resyncs():
 
 def test_unknown_command_rejected():
     with pytest.raises(SystemExit):
-        parser().parse_args(['graph', 'x'])
+        parser().parse_args(['impact', 'x'])
 
 
 @pytest.mark.parametrize('text, expected', [

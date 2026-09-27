@@ -257,3 +257,32 @@ def test_new_refuses_inside_node_duplicate_or_root(blinkered):
     assert 'outside nodes_root' in blinkered('new', 'other/thing')[2]
     assert 'outside nodes_root' in blinkered('new', 'src')[2]
     assert 'root cannot be a node' in blinkered('new', '.')[2]
+
+
+# Graph
+
+import json
+
+
+def test_graph_emits_compact_json(blinkered):
+    code, out, _ = blinkered('graph')
+    assert code == 0 and '\n' not in out.strip()
+    data = json.loads(out)
+    assert data['version'] == 1 and len(data['nodes']) == 9
+    assert {'source': 'report', 'target': 'lookup', 'kind': 'joins'} in data['edges']
+
+
+def test_graph_closure_filters_and_indent(blinkered):
+    code, out, _ = blinkered('graph', 'report', '--via', 'reads,joins', '--exclude-tag', 'infra',
+                             '--indent', '2')
+    assert code == 0 and out.count('\n') > 5
+    data = json.loads(out)
+    # derived_from is not followed, so the walk stops at selection and subset
+    assert {n['id'] for n in data['nodes']} == {'report', 'selection', 'lookup', 'subset'}
+    assert all(e['kind'] in ('reads', 'joins') for e in data['edges'])
+    assert len(data['edges']) == 3
+
+
+def test_graph_of_unknown_node_fails(blinkered):
+    code, _, err = blinkered('graph', 'missing')
+    assert code == 2 and 'unknown node missing' in err

@@ -85,3 +85,40 @@ def cycles(nodes: dict[str, Node]) -> list[list[str]]:
         if id not in state:
             visit(id)
     return found
+
+
+GRAPH_VERSION = 1
+
+
+def export(nodes: dict[str, Node], start: str | None = None, *, via: Iterable[str] | None = None,
+           tags: Iterable[str] | None = None, exclude_tags: Iterable[str] | None = None) -> dict:
+    """Nodes and resolved edges as plain data, sorted for stable output.
+
+    `start` restricts to its closure along `via`; `tags` and `exclude_tags` filter nodes, and an
+    edge is kept only when both ends are kept. Unresolved references are omitted.
+    """
+    via = None if via is None else set(via)
+    ids = closure(nodes, start, via=via) if start is not None else list(nodes)
+    tags = None if tags is None else set(tags)
+    exclude_tags = set(exclude_tags or ())
+    kept = {id for id in ids
+            if (tags is None or tags & set(nodes[id].tags)) and not exclude_tags & set(nodes[id].tags)}
+    index = shorts(nodes)
+    edges = set()
+    for id in kept:
+        for kind, references in nodes[id].edges.items():
+            if via is not None and kind not in via:
+                continue
+            for reference in references:
+                try:
+                    target = resolve(nodes, reference, index)
+                except Unresolved:
+                    continue
+                if target in kept:
+                    edges.add((id, target, kind))
+    return {
+        'version': GRAPH_VERSION,
+        'nodes': [{'id': id, 'directory': nodes[id].directory, 'tags': sorted(nodes[id].tags)}
+                  for id in sorted(kept)],
+        'edges': [{'source': s, 'target': t, 'kind': k} for s, t, k in sorted(edges)],
+    }

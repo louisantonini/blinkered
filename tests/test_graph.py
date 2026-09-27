@@ -56,3 +56,42 @@ def test_cycle_is_reported():
                                  node('c', uses=['a'])]}
     [cycle] = cycles(nodes)
     assert cycle[0] == cycle[-1] and set(cycle) == {'a', 'b', 'c'}
+
+
+# Export
+
+from blinkered.graph import export
+
+
+def edge_set(data):
+    return {(e['source'], e['target'], e['kind']) for e in data['edges']}
+
+
+def test_export_whole_graph_is_sorted_and_versioned():
+    data = export(NODES)
+    assert data['version'] == 1
+    assert [n['id'] for n in data['nodes']] == sorted(NODES)
+    assert data['edges'] == sorted(data['edges'], key=lambda e: (e['source'], e['target'], e['kind']))
+    assert ('report', 'lookup', 'joins') in edge_set(data)
+    assert len(data['edges']) == 6
+
+
+def test_export_closure_and_via():
+    data = export(NODES, 'report', via=['reads', 'derived_from'])
+    assert [n['id'] for n in data['nodes']] == ['feature_a', 'report', 'selection', 'source']
+    assert edge_set(data) == {('report', 'selection', 'reads'), ('selection', 'feature_a', 'derived_from'),
+                              ('feature_a', 'source', 'reads')}
+
+
+def test_export_tag_filters_drop_edges_to_hidden_nodes():
+    data = export(NODES, exclude_tags=['infra'])
+    assert 'lib' not in {n['id'] for n in data['nodes']}
+    assert not any(e['target'] == 'lib' for e in data['edges'])
+    data = export(NODES, tags=['dataset'])
+    assert [n['id'] for n in data['nodes']] == ['selection', 'source']
+    assert data['edges'] == []
+
+
+def test_export_omits_unresolved_references():
+    nodes = {n.id: n for n in [node('a', uses=['ghost', 'b']), node('b')]}
+    assert edge_set(export(nodes)) == {('a', 'b', 'uses')}

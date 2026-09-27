@@ -41,6 +41,7 @@ blinkered workspace report    # narrow the working tree to that closure
 blinkered status              # compare the view with the closure after pulls or edits
 blinkered workspace           # resync the stored focus
 blinkered workspace --all     # restore the full working tree
+blinkered graph               # nodes and edges as JSON
 ```
 
 See [SPEC.md](https://github.com/louisantonini/blinkered/blob/main/SPEC.md) for the model, layout rules and full behaviour.
@@ -107,6 +108,21 @@ focus: report
   nodes/sketch
   nodes/source
   nodes/utils
+```
+
+## Graph
+
+`blinkered graph` emits the graph as JSON (`version`, `nodes`, `edges`) for any tool to display. Restrict it to a node's closure, edge kinds or tags:
+
+```sh
+blinkered graph report --via reads,joins --exclude-tag infra --indent 2
+```
+
+For example, a Mermaid flowchart with `jq`:
+
+```sh
+blinkered graph | jq -r '"flowchart LR", (.edges[] |
+  "  \(.source | gsub("/"; "_"))[\(.source)] -- \(.kind) --> \(.target | gsub("/"; "_"))[\(.target)]")'
 ```
 
 ## Scope
