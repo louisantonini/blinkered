@@ -49,7 +49,8 @@ def repo(tmp_path: Path) -> Path:
             + f'VALUE = {name!r}\n')
     (root / 'lib').mkdir()
     (root / 'lib' / 'helpers.py').write_text('HELP = 1\n')
-    (root / 'blinkered.toml').write_text('always = ["lib"]\n\n[plugins]\npython_imports = true\n')
+    (root / 'blinkered.toml').write_text(
+        'nodes_root = "src/nodes"\nalways = ["lib"]\n\n[plugins]\npython_imports = true\n')
     (root / '.gitignore').write_text('__pycache__/\n*.bin\nscratch/\n')
     (root / 'README.md').write_text('demo\n')
     git(root, 'add', '-A')

@@ -6,6 +6,7 @@ import ast
 from pathlib import Path
 
 from ..findings import Finding
+from ..graph import targets
 from ..manifest import Node
 
 
@@ -37,12 +38,12 @@ def check(root: Path, nodes: dict[str, Node]) -> list[Finding]:
     """Imports of another node's directory that the importing node does not declare as an edge."""
     findings = []
     for node in nodes.values():
-        allowed = set(node.targets())
+        allowed = set(targets(nodes, node.id))
         for file in sorted((root / node.directory).rglob('*.py')):
             relative = file.relative_to(root).as_posix()
             for path in imported_paths(file, relative):
                 target = owner(path, nodes)
-                if target and target.name != node.name and target.name not in allowed:
+                if target and target.id != node.id and target.id not in allowed:
                     findings.append(Finding('import', relative,
-                                            f'imports {target.name} without a declared edge'))
+                                            f'imports {target.id} without a declared edge'))
     return findings

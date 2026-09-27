@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "blinkered"
-version = "0.0.1"
+version = "0.0.2"
 description = "Work on one node of a repository while the working tree shows only its dependency closure."
 readme = "README.md"
 requires-python = ">=3.11"

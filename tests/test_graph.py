@@ -9,7 +9,7 @@ def node(name, tags=(), **edges):
                 {kind: tuple(targets) for kind, targets in edges.items()})
 
 
-NODES = {n.name: n for n in [
+NODES = {n.id: n for n in [
     node('source', ['dataset']),
     node('feature_a', ['transform'], reads=['source']),
     node('lookup', ['transform'], reads=['source'], uses=['lib']),
@@ -52,7 +52,7 @@ def test_acyclic_graph_has_no_cycles():
 
 
 def test_cycle_is_reported():
-    nodes = {n.name: n for n in [node('a', uses=['b']), node('b', uses=['c']),
+    nodes = {n.id: n for n in [node('a', uses=['b']), node('b', uses=['c']),
                                  node('c', uses=['a'])]}
     [cycle] = cycles(nodes)
     assert cycle[0] == cycle[-1] and set(cycle) == {'a', 'b', 'c'}

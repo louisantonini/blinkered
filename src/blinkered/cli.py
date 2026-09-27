@@ -1,6 +1,5 @@
 """Command-line entry point."""
 import argparse
-import posixpath
 import sys
 from collections import Counter
 from pathlib import Path
@@ -8,7 +7,8 @@ from pathlib import Path
 import blinkered
 from . import checks, config as configuration, git, state
 from .config import FILENAME
-from .graph import closure
+from .manifest import discover, node_id
+from .graph import Unresolved, closure, resolve
 
 
 def csv(value: str) -> list[str]:
@@ -49,16 +49,20 @@ def report(title, findings):
         print(f'  {finding}', file=sys.stderr)
 
 
+def find(nodes, reference):
+    try:
+        return resolve(nodes, reference)
+    except Unresolved as error:
+        raise Failure(str(error)) from None
+
+
 def view(nodes, config, focus):
-    if focus not in nodes:
-        raise Failure(f'unknown node: {focus}')
-    return sorted({nodes[name].directory for name in closure(nodes, focus)} | set(config.always))
+    return sorted({nodes[id].directory for id in closure(nodes, find(nodes, focus))}
+                  | set(config.always))
 
 
 def run_closure(root, config, nodes, errors, args):
-    if args.node not in nodes:
-        raise Failure(f'unknown node: {args.node}')
-    print('\n'.join(closure(nodes, args.node, via=args.via, tags=args.tag)))
+    print('\n'.join(closure(nodes, find(nodes, args.node), via=args.via, tags=args.tag)))
     return 0
 
 
@@ -72,6 +76,7 @@ def run_workspace(root, config, nodes, errors, args):
     focus = args.node or state.read_focus(root)
     if focus is None:
         raise Failure('no focus: give a node')
+    focus = find(nodes, focus)
     blocking = list(errors) + checks.layout(root, config, nodes)
     if blocking:
         report('refusing: fix these first (blinkered check)', blocking)
@@ -116,16 +121,18 @@ def run_status(root, config, nodes, errors, args):
 
 def run_new(root, config, nodes, errors, args):
     directory = (Path.cwd() / args.directory).resolve().relative_to(root.resolve()).as_posix()
-    name = posixpath.basename(directory)
     if directory in ('', '.'):
         raise Failure('the repository root cannot be a node')
-    if name in nodes:
-        raise Failure(f'node {name} already exists at {nodes[name].directory}')
+    id = node_id(directory, config.nodes_root)
+    if id is None:
+        raise Failure(f'outside nodes_root {config.nodes_root}')
+    if id in nodes:
+        raise Failure(f'node {id} already exists')
     for node in nodes.values():
         if directory.startswith(node.directory + '/'):
-            raise Failure(f'inside node {node.name}')
+            raise Failure(f'inside node {node.id}')
         if node.directory.startswith(directory + '/'):
-            raise Failure(f'would contain node {node.name}')
+            raise Failure(f'would contain node {node.id}')
     path = root / directory
     path.mkdir(parents=True, exist_ok=True)
     (path / FILENAME).write_text('tags = []\n\n[edges]\n')
@@ -166,8 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         git.require_version(Path.cwd())
         root = git.repo_root(Path.cwd())
         config = configuration.load(root)
-        from .manifest import discover
-        nodes, errors = discover(root)
+        nodes, errors = discover(root, config.nodes_root)
         return COMMANDS[args.command](root, config, nodes, errors, args)
     except (Failure, git.GitError, configuration.NotManaged, ValueError) as error:
         print(f'blinkered: {error}', file=sys.stderr)

@@ -5,7 +5,7 @@ from pathlib import Path
 from . import git
 from .config import Config
 from .findings import Finding
-from .graph import cycles
+from .graph import Unresolved, cycles, resolve, shorts
 from .manifest import Node
 
 
@@ -30,12 +30,17 @@ def in_view(path: str, keep: list[str]) -> bool:
 
 def check(root: Path, config: Config, nodes: dict[str, Node],
           errors: list[Finding]) -> list[Finding]:
-    """Manifest errors, unknown targets, cycles, layout-rule violations and plugin findings."""
+    """Manifest errors, unknown or ambiguous targets, cycles, layout-rule violations and plugin
+    findings."""
     findings = list(errors)
+    index = shorts(nodes)
     for node in nodes.values():
         for kind, targets in node.edges.items():
-            findings += [Finding('edge', node.directory, f'{kind} → unknown node {target}')
-                         for target in targets if target not in nodes]
+            for target in targets:
+                try:
+                    resolve(nodes, target, index)
+                except Unresolved as error:
+                    findings.append(Finding('edge', node.directory, f'{kind} → {error}'))
     findings += [Finding('cycle', nodes[cycle[0]].directory, ' → '.join(cycle))
                  for cycle in cycles(nodes)]
     findings += layout(root, config, nodes)

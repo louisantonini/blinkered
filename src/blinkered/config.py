@@ -12,6 +12,7 @@ class NotManaged(RuntimeError):
 
 @dataclass(frozen=True)
 class Config:
+    nodes_root: str = ''
     always: tuple[str, ...] = ()
     grouping_allow: tuple[str, ...] = ('README.md',)
     plugins: dict[str, bool] = field(default_factory=dict)
@@ -23,9 +24,10 @@ def load(root: Path) -> Config:
     if not path.is_file():
         raise NotManaged(f'no {FILENAME} at {root}')
     data = tomllib.loads(path.read_text())
-    unknown = set(data) - {'always', 'grouping_allow', 'plugins'}
+    unknown = set(data) - {'nodes_root', 'always', 'grouping_allow', 'plugins'}
     if unknown:
         raise ValueError(f'{FILENAME}: unknown keys {sorted(unknown)}')
-    return Config(always=tuple(item.strip('/') for item in data.get('always', ())),
+    return Config(nodes_root=data.get('nodes_root', '').strip('/'),
+                  always=tuple(item.strip('/') for item in data.get('always', ())),
                   grouping_allow=tuple(data.get('grouping_allow', Config.grouping_allow)),
                   plugins=dict(data.get('plugins', {})))

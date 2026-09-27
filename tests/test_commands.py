@@ -55,7 +55,7 @@ def test_closure_via_and_tag(blinkered):
 
 def test_closure_of_unknown_node_fails(blinkered):
     code, _, err = blinkered('closure', 'missing')
-    assert code == 2 and 'unknown node: missing' in err
+    assert code == 2 and 'unknown node missing' in err
 
 
 def test_unmanaged_repository_fails(repo, blinkered):
@@ -253,6 +253,7 @@ def test_new_creates_node_and_adds_it_to_view(repo, blinkered):
 
 def test_new_refuses_inside_node_duplicate_or_root(blinkered):
     assert blinkered('new', 'src/nodes/feature_a/inner')[2].strip().endswith('inside node feature_a')
-    assert 'already exists' in blinkered('new', 'other/feature_a')[2]
-    assert 'would contain node' in blinkered('new', 'src')[2]
+    assert 'already exists' in blinkered('new', 'src/nodes/feature_a')[2]
+    assert 'outside nodes_root' in blinkered('new', 'other/thing')[2]
+    assert 'outside nodes_root' in blinkered('new', 'src')[2]
     assert 'root cannot be a node' in blinkered('new', '.')[2]
