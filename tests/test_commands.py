@@ -268,8 +268,8 @@ def test_graph_emits_compact_json(blinkered):
     code, out, _ = blinkered('graph')
     assert code == 0 and '\n' not in out.strip()
     data = json.loads(out)
-    assert data['version'] == 1 and len(data['nodes']) == 9
-    assert {'source': 'report', 'target': 'lookup', 'kind': 'joins'} in data['edges']
+    assert data['version'] == 2 and len(data['nodes']) == 9
+    assert {'source': 'report', 'target': 'lookup', 'kind': 'joins', 'implied': False} in data['edges']
 
 
 def test_graph_closure_filters_and_indent(blinkered):
@@ -281,6 +281,16 @@ def test_graph_closure_filters_and_indent(blinkered):
     assert {n['id'] for n in data['nodes']} == {'report', 'selection', 'lookup', 'subset'}
     assert all(e['kind'] in ('reads', 'joins') for e in data['edges'])
     assert len(data['edges']) == 3
+
+
+def test_graph_dependents_and_depths(blinkered):
+    code, out, _ = blinkered('graph', 'subset', '--dependencies', '0', '--dependents', '1')
+    assert code == 0
+    assert {n['id'] for n in json.loads(out)['nodes']} == {'subset', 'feature_a', 'feature_b', 'lookup'}
+    for depth in ('1', 'all'):
+        with pytest.raises(SystemExit) as exit:
+            blinkered('graph', '--dependents', depth)
+        assert exit.value.code == 2
 
 
 def test_graph_of_unknown_node_fails(blinkered):

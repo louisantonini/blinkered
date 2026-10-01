@@ -114,16 +114,17 @@ focus: report
 
 ## Graph
 
-`blinkered graph` emits the graph as JSON (`version`, `nodes`, `edges`) for any tool to display. Restrict it to a node's closure, edge kinds or tags:
+`blinkered graph` emits the graph as JSON (`version`, `nodes`, `edges`) for any tool to display. Filters on tags and edge kinds come first; a node then restricts it to what it depends on and what depends on it, each to a number of steps:
 
 ```sh
-blinkered graph report --via reads,joins --exclude-tag infra --indent 2
+blinkered graph report --via reads,joins --exclude-tag infra --indent 2   # filtered, around report
+blinkered graph subset --dependencies 0 --dependents 1                   # direct dependents only
 ```
 
-For example, a Mermaid flowchart with `jq`:
+Each edge is flagged `implied` when another path joins the same nodes. For example, a Mermaid flowchart with `jq`, without implied edges:
 
 ```sh
-blinkered graph | jq -r '"flowchart LR", (.edges[] |
+blinkered graph | jq -r '"flowchart LR", (.edges[] | select(.implied | not) |
   "  \(.source | gsub("/"; "_"))[\(.source)] -- \(.kind) --> \(.target | gsub("/"; "_"))[\(.target)]")'
 ```
 

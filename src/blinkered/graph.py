@@ -89,38 +89,86 @@ def cycles(nodes: dict[str, Node]) -> list[list[str]]:
     return found
 
 
-GRAPH_VERSION = 1
+GRAPH_VERSION = 2
 
 
-def export(nodes: dict[str, Node], start: str | None = None, *, via: Iterable[str] | None = None,
-           tags: Iterable[str] | None = None, exclude_tags: Iterable[str] | None = None) -> dict:
+def _walk(start: str, step: dict[str, set[str]], depth: int | None) -> set[str]:
+    """Nodes within `depth` steps of `start` along `step` (None: unlimited)."""
+    seen, frontier, taken = {start}, {start}, 0
+    while frontier and (depth is None or taken < depth):
+        frontier = {target for id in frontier for target in step.get(id, ())} - seen
+        seen |= frontier
+        taken += 1
+    return seen
+
+
+def _implied(edges: set[tuple[str, str, str]]) -> set[tuple[str, str, str]]:
+    """Edges whose source reaches their target through at least one other node."""
+    out = {}
+    for source, target, _ in edges:
+        out.setdefault(source, set()).add(target)
+    result = set()
+    for source, target, kind in edges:
+        stack = [id for id in out[source] if id != target]
+        seen = set(stack)
+        while stack:
+            id = stack.pop()
+            if target in out.get(id, ()):
+                result.add((source, target, kind))
+                break
+            for next_id in out.get(id, ()):
+                if next_id not in seen and next_id != target:
+                    seen.add(next_id)
+                    stack.append(next_id)
+    return result
+
+
+def export(nodes: dict[str, Node], start: str | None = None, *, dependencies: int | None = None,
+           dependents: int | None = None, via: Iterable[str] | None = None,
+           exclude_via: Iterable[str] | None = None, tags: Iterable[str] | None = None,
+           exclude_tags: Iterable[str] | None = None) -> dict:
     """Nodes and resolved edges as plain data, sorted for stable output.
 
-    `start` restricts to its closure along `via`; `tags` and `exclude_tags` filter nodes, and an
-    edge is kept only when both ends are kept. Unresolved references are omitted.
+    Applied in order: `tags`/`exclude_tags` keep or drop nodes and `via`/`exclude_via` keep or drop edge kinds;
+    from `start`, the walk then takes up to `dependencies` steps along edges and `dependents` steps against them
+    (None: unlimited; 0: none) on what remains; without `start`, every remaining node. Each edge is flagged
+    `implied` when its source reaches its target through other emitted nodes. Unresolved references are omitted.
     """
-    via = None if via is None else set(via)
-    ids = closure(nodes, start, via=via) if start is not None else list(nodes)
+    index = shorts(nodes)
     tags = None if tags is None else set(tags)
     exclude_tags = set(exclude_tags or ())
-    kept = {id for id in ids
-            if (tags is None or tags & set(nodes[id].tags)) and not exclude_tags & set(nodes[id].tags)}
-    index = shorts(nodes)
+    via = None if via is None else set(via)
+    exclude_via = set(exclude_via or ())
+    allowed = {id for id, node in nodes.items()
+               if (tags is None or tags & set(node.tags)) and not exclude_tags & set(node.tags)}
     edges = set()
-    for id in kept:
+    for id in allowed:
         for kind, references in nodes[id].edges.items():
-            if via is not None and kind not in via:
+            if (via is not None and kind not in via) or kind in exclude_via:
                 continue
             for reference in references:
                 try:
                     target = resolve(nodes, reference, index)
                 except Unresolved:
                     continue
-                if target in kept:
+                if target in allowed:
                     edges.add((id, target, kind))
+    kept = allowed
+    if start is not None:
+        start = resolve(nodes, start, index)
+        if start not in allowed:
+            raise ValueError(f'{start} is excluded by the tag filters')
+        down, up = {}, {}
+        for source, target, _ in edges:
+            down.setdefault(source, set()).add(target)
+            up.setdefault(target, set()).add(source)
+        kept = _walk(start, down, dependencies) | _walk(start, up, dependents)
+    edges = {(s, t, k) for s, t, k in edges if s in kept and t in kept}
+    implied = _implied(edges)
     return {
         'version': GRAPH_VERSION,
         'nodes': [{'id': id, 'directory': nodes[id].directory, 'tags': sorted(nodes[id].tags)}
                   for id in sorted(kept)],
-        'edges': [{'source': s, 'target': t, 'kind': k} for s, t, k in sorted(edges)],
+        'edges': [{'source': s, 'target': t, 'kind': k, 'implied': (s, t, k) in implied}
+                  for s, t, k in sorted(edges)],
     }

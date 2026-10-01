@@ -57,19 +57,24 @@ python_imports = true             # code imports must be covered by declared edg
 | `blinkered workspace --all` | Disable sparse checkout; clear the selection. |
 | `blinkered status` | Compare view with closure of the stored focus: missing, extra, leaks. Read-only; non-zero exit if out of sync. |
 | `blinkered new <node>` | Create directory and `blinkered.toml`; add it to the current view. Refuses inside a node. |
-| `blinkered graph [<node>] [--via kinds] [--tag tags] [--exclude-tag tags] [--indent n]` | Emit nodes and resolved edges as JSON; with `<node>`, only its closure. |
+| `blinkered graph [<node>] [--dependencies n\|all] [--dependents n\|all] [--via kinds] [--exclude-via kinds] [--tag tags] [--exclude-tag tags] [--indent n]` | Emit nodes and resolved edges as JSON; with `<node>`, only its dependencies and dependents. |
 | `blinkered tags` | List tags and edge kinds in use, with counts. |
 | `blinkered check` | Report manifest errors, unknown or ambiguous targets, cycles, layout-rule violations and plugin findings. |
 
 ## Behaviour
 
-- **Closure**: start at the node, follow outgoing edges to their targets, repeat until no new node is reached. Manifests come from the working tree or the index, so the result is independent of the current view. Output: one full id per line. `--via` follows only the listed edge kinds; `--tag` keeps and `--exclude-tag` omits nodes with those tags in the output, without stopping traversal. Read-only; `workspace` uses the same computation.
-- **Graph**: one neutral format, JSON; displaying it is up to the user. Nodes are selected by the closure of `<node>` (along `--via`) or all nodes, then filtered by `--tag`/`--exclude-tag`; an edge is emitted when its kind passes `--via` and both ends are emitted. Edges use full ids; unresolved references are omitted (`check` reports them). Output is sorted and compact unless `--indent` is given.
+- **Closure**: start at the node, follow outgoing edges to their targets, repeat until no new node is reached. Manifests come from the working tree or the index, so the result is independent of the current view. Output: one full id per line. `--via` follows only the listed edge kinds; `--tag` keeps and `--exclude-tag` omits nodes with those tags in the output, without stopping traversal, so the result stays the complete checkout. Read-only; `workspace` uses the same computation.
+- **Graph**: one neutral format, JSON; displaying it is up to the user. Applied in order:
+  1. Filters define the graph: `--tag` keeps and `--exclude-tag` drops nodes; `--via` keeps and `--exclude-via` drops edge kinds. Unlike `closure`, traversal cannot pass through what they remove.
+  2. With `<node>`, a walk from it on what remains: up to `--dependencies` steps along edges and `--dependents` steps against them, each a number or `all` (default; `0` for none). Without `<node>`, every remaining node, and the depth options are refused.
+  3. Every edge between emitted nodes is emitted, flagged `implied` when its source reaches its target through other emitted nodes, so a display can drop or soften it.
+
+  Edges use full ids; unresolved references are omitted (`check` reports them). Output is sorted and compact unless `--indent` is given.
 
 ```json
-{"version": 1,
+{"version": 2,
  "nodes": [{"id": "rvbr/gbs", "directory": "src/rvbr/gbs", "tags": []}],
- "edges": [{"source": "rvbr/gbs", "target": "rvbr/population", "kind": "defined_on"}]}
+ "edges": [{"source": "rvbr/gbs", "target": "rvbr/population", "kind": "defined_on", "implied": false}]}
 ```
 
 - **Selection**: foci are the given nodes plus, when `--tag` or `--exclude-tag` is given, every node with (`--tag`) and without (`--exclude-tag`) those tags; `--exclude-tag` alone selects every node without them. The view is the union of the foci's closures, which is always closed under dependencies.

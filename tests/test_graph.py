@@ -69,7 +69,7 @@ def edge_set(data):
 
 def test_export_whole_graph_is_sorted_and_versioned():
     data = export(NODES)
-    assert data['version'] == 1
+    assert data['version'] == 2
     assert [n['id'] for n in data['nodes']] == sorted(NODES)
     assert data['edges'] == sorted(data['edges'], key=lambda e: (e['source'], e['target'], e['kind']))
     assert ('report', 'lookup', 'joins') in edge_set(data)
@@ -90,6 +90,45 @@ def test_export_tag_filters_drop_edges_to_hidden_nodes():
     data = export(NODES, tags=['dataset'])
     assert [n['id'] for n in data['nodes']] == ['selection', 'source']
     assert data['edges'] == []
+
+
+def ids(data):
+    return {n['id'] for n in data['nodes']}
+
+
+def test_export_follows_dependents_as_well_as_dependencies():
+    assert ids(export(NODES, 'source')) == {'source', 'feature_a', 'lookup', 'selection', 'report'}
+    assert ids(export(NODES, 'lookup')) == {'lookup', 'source', 'lib', 'report'}
+
+
+def test_export_depths_limit_each_direction():
+    assert ids(export(NODES, 'source', dependents=1)) == {'source', 'feature_a', 'lookup'}
+    assert ids(export(NODES, 'lookup', dependencies=0)) == {'lookup', 'report'}
+    assert ids(export(NODES, 'lookup', dependencies=0, dependents=0)) == {'lookup'}
+    assert ids(export(NODES, 'report', dependencies=1, dependents=0)) == {'report', 'selection', 'lookup'}
+
+
+def test_export_filters_apply_before_traversal():
+    # feature_a is a transform: without it, selection no longer reaches source
+    assert ids(export(NODES, 'selection', exclude_tags=['transform'])) == {'selection'}
+    with pytest.raises(ValueError, match='excluded by the tag filters'):
+        export(NODES, 'report', exclude_tags=['transform'])
+    assert ids(export(NODES, 'report', via=['joins', 'uses'])) == {'report', 'lookup', 'lib'}
+
+
+def test_export_exclude_via_drops_edge_kinds():
+    data = export(NODES, exclude_via=['reads'])
+    assert edge_set(data) == {('lookup', 'lib', 'uses'), ('selection', 'feature_a', 'derived_from'),
+                              ('report', 'lookup', 'joins')}
+
+
+def test_export_flags_edges_implied_by_another_path():
+    nodes = {n.id: n for n in [node('a', uses=['b', 'c'], reads=['c']), node('b', uses=['c']), node('c')]}
+    flags = {(e['source'], e['target'], e['kind']): e['implied'] for e in export(nodes)['edges']}
+    assert flags == {('a', 'b', 'uses'): False, ('b', 'c', 'uses'): False,
+                     ('a', 'c', 'uses'): True, ('a', 'c', 'reads'): True}
+    # without b, the direct edges are the only paths
+    assert not any(e['implied'] for e in export(nodes, exclude_via=['uses'])['edges'])
 
 
 def test_export_omits_unresolved_references():

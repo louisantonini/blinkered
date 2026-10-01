@@ -16,6 +16,14 @@ def csv(value: str) -> list[str]:
     return [item for item in value.split(',') if item]
 
 
+def depth(value: str) -> int | None:
+    if value == 'all':
+        return None
+    if not value.isdigit():
+        raise argparse.ArgumentTypeError(f'expected a number or all, got {value}')
+    return int(value)
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog='blinkered', description=blinkered.__doc__)
     commands = root.add_subparsers(dest='command', required=True)
@@ -41,10 +49,15 @@ def parser() -> argparse.ArgumentParser:
     new.add_argument('directory')
 
     graph = commands.add_parser('graph', help='nodes and edges as JSON')
-    graph.add_argument('node', nargs='?', help='restrict to the closure of this node')
-    graph.add_argument('--via', type=csv, help='edge kinds to follow and emit, comma-separated')
-    graph.add_argument('--tag', type=csv, help='emit only nodes with these tags')
-    graph.add_argument('--exclude-tag', type=csv, help='omit nodes with these tags')
+    graph.add_argument('node', nargs='?', help='restrict to the dependencies and dependents of this node')
+    graph.add_argument('--dependencies', type=depth, default=argparse.SUPPRESS,
+                       help='steps along edges from the node: a number or all (default)')
+    graph.add_argument('--dependents', type=depth, default=argparse.SUPPRESS,
+                       help='steps against edges to the node: a number or all (default)')
+    graph.add_argument('--via', type=csv, help='keep only these edge kinds, comma-separated')
+    graph.add_argument('--exclude-via', type=csv, help='drop these edge kinds, comma-separated')
+    graph.add_argument('--tag', type=csv, help='keep only nodes with these tags')
+    graph.add_argument('--exclude-tag', type=csv, help='drop nodes with these tags')
     graph.add_argument('--indent', type=int, help='pretty-print with this indent')
 
     commands.add_parser('tags', help='tags and edge kinds in use, with counts')
@@ -202,7 +215,8 @@ def run_new(root, config, nodes, errors, args):
 
 def run_graph(root, config, nodes, errors, args):
     start = None if args.node is None else find(nodes, args.node)
-    data = export(nodes, start, via=args.via, tags=args.tag, exclude_tags=args.exclude_tag)
+    data = export(nodes, start, dependencies=vars(args).get('dependencies'), dependents=vars(args).get('dependents'), via=args.via,
+                  exclude_via=args.exclude_via, tags=args.tag, exclude_tags=args.exclude_tag)
     separators = (',', ':') if args.indent is None else None
     print(json.dumps(data, indent=args.indent, separators=separators, ensure_ascii=False))
     return 0
@@ -235,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.command == 'workspace' and args.all and (args.nodes or args.tag or args.exclude_tag):
         parser().error('workspace: give foci or --all, not both')
+    if args.command == 'graph' and args.node is None and ('dependencies' in vars(args) or 'dependents' in vars(args)):
+        parser().error('graph: --dependencies and --dependents need a node')
     try:
         git.require_version(Path.cwd())
         root = git.repo_root(Path.cwd())
