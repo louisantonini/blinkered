@@ -10,6 +10,7 @@ from . import checks, config as configuration, git, state
 from .config import FILENAME
 from .manifest import discover, node_id
 from .graph import Unresolved, closure, export, resolve
+from .plugins import COMMANDS as PLUGIN_COMMANDS
 
 
 def csv(value: str) -> list[str]:
@@ -62,6 +63,8 @@ def parser() -> argparse.ArgumentParser:
 
     commands.add_parser('tags', help='tags and edge kinds in use, with counts')
     commands.add_parser('check', help='manifest, graph and layout validation')
+    for name, plugin in PLUGIN_COMMANDS.items():
+        plugin.arguments(commands.add_parser(name, help=f'{plugin.HELP} (plugin {plugin.NAME})'))
     return root
 
 
@@ -243,6 +246,8 @@ def run_check(root, config, nodes, errors, args):
 
 COMMANDS = {'closure': run_closure, 'workspace': run_workspace, 'status': run_status,
             'new': run_new, 'graph': run_graph, 'tags': run_tags, 'check': run_check}
+if set(COMMANDS) & set(PLUGIN_COMMANDS):
+    raise RuntimeError(f'plugin commands shadow built-ins: {sorted(set(COMMANDS) & set(PLUGIN_COMMANDS))}')
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -256,6 +261,11 @@ def main(argv: list[str] | None = None) -> int:
         root = git.repo_root(Path.cwd())
         config = configuration.load(root)
         nodes, errors = discover(root, config.nodes_root)
+        if args.command in PLUGIN_COMMANDS:
+            plugin = PLUGIN_COMMANDS[args.command]
+            if plugin.NAME not in config.plugins:
+                raise Failure(f'plugin {plugin.NAME} is not enabled under [plugins] in {FILENAME}')
+            return plugin.run(root, config, nodes, config.plugins[plugin.NAME], args)
         return COMMANDS[args.command](root, config, nodes, errors, args)
     except (Failure, git.GitError, configuration.NotManaged, ValueError) as error:
         print(f'blinkered: {error}', file=sys.stderr)

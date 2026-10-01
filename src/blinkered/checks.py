@@ -44,9 +44,9 @@ def check(root: Path, config: Config, nodes: dict[str, Node],
     findings += [Finding('cycle', nodes[cycle[0]].directory, ' → '.join(cycle))
                  for cycle in cycles(nodes)]
     findings += layout(root, config, nodes)
-    if config.plugins.get('python_imports'):
-        from .plugins import python_imports
-        findings += python_imports.check(root, nodes)
+    from .plugins import PLUGINS
+    for name, settings in config.plugins.items():
+        findings += PLUGINS[name].check(root, nodes, settings)
     return findings
 
 

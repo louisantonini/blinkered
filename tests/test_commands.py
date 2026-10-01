@@ -365,3 +365,56 @@ def tag(repo, node, name):
     path = repo / 'src' / 'nodes' / node / 'blinkered.toml'
     path.write_text(path.read_text().replace('tags = [', f'tags = ["{name}", ', 1).replace(', ]', ']'))
     git(repo, 'commit', '-q', '-am', f'tag {node}')
+
+
+# Plugin commands
+
+def test_python_imports_reports_drift_both_ways_and_writes(repo, blinkered):
+    code, out, _ = blinkered('python-imports')
+    assert code == 0 and 'imports edges match the code' in out
+    with open(repo / 'src' / 'nodes' / 'feature_a' / 'model.py', 'a') as file:
+        file.write('from src.nodes.feature_b import model\n')
+    manifest = repo / 'src' / 'nodes' / 'lookup' / 'blinkered.toml'
+    manifest.write_text(manifest.read_text().replace('imports = ["subset"]', 'imports = ["subset", "utils"]'))
+    code, out, _ = blinkered('check')
+    assert code == 1
+    assert 'imports feature_b without an imports edge' in out
+    assert 'src/nodes/lookup/blinkered.toml: imports edge to utils without an import' in out
+    code, out, _ = blinkered('python-imports')
+    assert code == 1 and 'feature_a\n  + feature_b' in out and 'lookup\n  - utils' in out
+    code, out, _ = blinkered('python-imports', '--write')
+    assert code == 0 and 'wrote 2 manifest(s)' in out
+    assert 'imports = ["feature_b", "subset"]' in (repo / 'src' / 'nodes' / 'feature_a' / 'blinkered.toml').read_text()
+    assert 'reads = ["subset"]' in (repo / 'src' / 'nodes' / 'feature_a' / 'blinkered.toml').read_text()
+    assert 'imports = ["subset"]' in manifest.read_text()
+    assert blinkered('check')[0] == 0
+
+
+def test_other_edges_no_longer_cover_imports(repo, blinkered):
+    manifest = repo / 'src' / 'nodes' / 'filter' / 'blinkered.toml'
+    manifest.write_text(manifest.read_text().replace('imports = ["source"]\n', ''))
+    code, out, _ = blinkered('check')
+    assert code == 1 and 'src/nodes/filter/model.py: imports source without an imports edge' in out
+
+
+def test_plugin_kind_setting_and_disabled_plugin(repo, blinkered):
+    config = repo / 'blinkered.toml'
+    config.write_text(config.read_text().replace('python_imports = true', 'python_imports = { kind = "code" }'))
+    code, out, _ = blinkered('python-imports')
+    assert code == 1 and 'code' not in out.splitlines()[0]
+    blinkered('python-imports', '--write')
+    assert 'code = ["source"]' in (repo / 'src' / 'nodes' / 'filter' / 'blinkered.toml').read_text()
+    config.write_text(config.read_text().replace('python_imports = { kind = "code" }', 'python_imports = false'))
+    code, _, err = blinkered('python-imports')
+    assert code == 2 and 'plugin python_imports is not enabled' in err
+
+
+def test_unknown_plugins_and_settings_are_rejected(repo, blinkered):
+    config = repo / 'blinkered.toml'
+    original = config.read_text()
+    config.write_text(original + 'other = true\n')
+    code, _, err = blinkered('check')
+    assert code == 2 and 'unknown plugin other' in err
+    config.write_text(original.replace('python_imports = true', 'python_imports = { kinds = "x" }'))
+    code, _, err = blinkered('check')
+    assert code == 2 and "unknown settings ['kinds']" in err

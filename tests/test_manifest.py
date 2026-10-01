@@ -38,3 +38,23 @@ def test_parse_rejects_invalid_toml():
 def test_parse_uses_given_id():
     node = parse('nodes/rvbr/pdr', '', id='rvbr/pdr')
     assert node.id == 'rvbr/pdr' and node.short == 'pdr' and node.directory == 'nodes/rvbr/pdr'
+
+
+# Setting an edge
+
+from blinkered.manifest import set_edge
+
+
+def test_set_edge_replaces_inserts_and_removes():
+    text = 'tags = ["x"]\n\n[edges]\nuses = ["a"]\nimports = ["b"]\n'
+    assert set_edge(text, 'imports', ['b', 'c']) == 'tags = ["x"]\n\n[edges]\nuses = ["a"]\nimports = ["b", "c"]\n'
+    assert set_edge(text, 'imports', []) == 'tags = ["x"]\n\n[edges]\nuses = ["a"]\n'
+    assert set_edge('tags = []\n\n[edges]\nuses = ["a"]\n', 'imports', ['b']) == \
+        'tags = []\n\n[edges]\nuses = ["a"]\nimports = ["b"]\n'
+
+
+def test_set_edge_handles_missing_section_and_multiline_arrays():
+    assert set_edge('tags = []\n', 'imports', ['b']) == 'tags = []\n\n[edges]\nimports = ["b"]\n'
+    assert set_edge('tags = []\n', 'imports', []) == 'tags = []\n'
+    text = 'tags = []\n\n[edges]\nimports = [\n  "a",\n  "b",\n]\nuses = ["c"]\n'
+    assert set_edge(text, 'imports', ['a']) == 'tags = []\n\n[edges]\nimports = ["a"]\nuses = ["c"]\n'

@@ -43,7 +43,7 @@ def repo(tmp_path: Path) -> Path:
         directory = root / 'src' / 'nodes' / name
         directory.mkdir(parents=True)
         (directory / '__init__.py').write_text('')
-        (directory / 'blinkered.toml').write_text(manifest(tags, edges))
+        (directory / 'blinkered.toml').write_text(manifest(tags, {**edges, **({'imports': imports} if imports else {})}))
         (directory / 'model.py').write_text(''.join(
             f'from src.nodes.{target} import model as _{target}\n' for target in imports)
             + f'VALUE = {name!r}\n')

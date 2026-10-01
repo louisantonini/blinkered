@@ -1,5 +1,7 @@
 """Node manifests: `blinkered.toml` in any directory other than the repository root."""
+import json
 import posixpath
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -74,3 +76,28 @@ def parse(directory: str, text: str, id: str | None = None) -> Node:
             raise ValueError(f'edges.{kind} must be a list of node names')
     return Node(id=directory if id is None else id, directory=directory, tags=tuple(tags),
                 edges={kind: tuple(targets) for kind, targets in edges.items()})
+
+
+def set_edge(text: str, kind: str, targets: list[str]) -> str:
+    """Manifest `text` with `kind` under `[edges]` set to `targets` (removed when empty), other lines unchanged."""
+    lines = text.splitlines()
+    header = next((i for i, line in enumerate(lines) if line.strip() == '[edges]'), None)
+    entry = f'{kind} = {json.dumps(targets, ensure_ascii=False)}'
+    if header is None:
+        result = lines + ([] if not targets else ([''] if lines and lines[-1].strip() else []) + ['[edges]', entry])
+    else:
+        end = next((i for i in range(header + 1, len(lines)) if lines[i].lstrip().startswith('[') and
+                    not re.match(r'\s*[\w-]+\s*=', lines[i])), len(lines))
+        start = next((i for i in range(header + 1, end) if re.match(rf'\s*{re.escape(kind)}\s*=', lines[i])), None)
+        if start is not None:
+            stop = start
+            while ']' not in lines[stop] and stop + 1 < end:
+                stop += 1
+            result = lines[:start] + ([entry] if targets else []) + lines[stop + 1:]
+        else:
+            last = max([i for i in range(header, end) if lines[i].strip()], default=header)
+            result = lines[:last + 1] + ([entry] if targets else []) + lines[last + 1:]
+    text = '\n'.join(result) + '\n'
+    if tuple(targets) != parse('.', text).edges.get(kind, ()):
+        raise ValueError(f'could not set {kind} in manifest')
+    return text

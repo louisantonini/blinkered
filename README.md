@@ -32,6 +32,7 @@ tags = ["transform"]
 [edges]
 reads = ["selection"]
 joins = ["lookup"]
+imports = ["lookup", "selection"]   # written by blinkered python-imports --write
 ```
 
 ```sh
@@ -44,6 +45,7 @@ blinkered status              # compare the view with the closure after pulls or
 blinkered workspace           # resync the stored selection
 blinkered workspace --all     # restore the full working tree
 blinkered graph               # nodes and edges as JSON
+blinkered python-imports --write   # rewrite imports edges from the code (plugin)
 ```
 
 See [SPEC.md](https://github.com/louisantonini/blinkered/blob/main/SPEC.md) for the model, layout rules and full behaviour.

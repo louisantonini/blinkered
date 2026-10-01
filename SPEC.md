@@ -2,7 +2,7 @@
 
 Work on one node of a repository while the working tree shows only its dependency closure. The graph may grow arbitrarily large and deep.
 
-Standalone command-line tool, installed outside the repositories it manages (`pipx install blinkered`, `uv tool install blinkered`). Language-neutral core; language-specific checks are optional plugins.
+Standalone command-line tool, installed outside the repositories it manages (`pipx install blinkered`, `uv tool install blinkered`). Language-neutral core; language-specific checks and commands are optional plugins.
 
 ## Model
 
@@ -45,7 +45,7 @@ always = ["lib"]                  # directories included in every view
 grouping_allow = ["README.md"]    # files allowed in grouping directories
 
 [plugins]
-python_imports = true             # code imports must be covered by declared edges
+python_imports = true             # or { kind = "imports" }: imports between nodes kept as edges of that kind
 ```
 
 ## Commands
@@ -60,10 +60,13 @@ python_imports = true             # code imports must be covered by declared edg
 | `blinkered graph [<node>] [--dependencies n\|all] [--dependents n\|all] [--via kinds] [--exclude-via kinds] [--tag tags] [--exclude-tag tags] [--indent n]` | Emit nodes and resolved edges as JSON; with `<node>`, only its dependencies and dependents. |
 | `blinkered tags` | List tags and edge kinds in use, with counts. |
 | `blinkered check` | Report manifest errors, unknown or ambiguous targets, cycles, layout-rule violations and plugin findings. |
+| `blinkered python-imports [--write]` | Plugin `python_imports`: list differences between the `imports` edges and the code; `--write` rewrites them. |
 
 ## Behaviour
 
 - **Closure**: start at the node, follow outgoing edges to their targets, repeat until no new node is reached. Manifests come from the working tree or the index, so the result is independent of the current view. Output: one full id per line. `--via` follows only the listed edge kinds; `--tag` keeps and `--exclude-tag` omits nodes with those tags in the output, without stopping traversal, so the result stays the complete checkout. Read-only; `workspace` uses the same computation.
+- **Plugins**: enabled under `[plugins]` in the root configuration, as `true` or a table of settings; unknown plugins or settings are errors. Each contributes findings to `check` and may add its own subcommand, which refuses to run while the plugin is disabled.
+- **Python imports** (`python_imports`): the Python files of each node on disk are parsed for imports of other nodes. Those imports are kept as edges of one kind, `imports` unless `kind` is set, which only the plugin writes: `check` reports an import without such an edge and such an edge without an import, and `python-imports --write` rewrites them. Other kinds are never written or checked against the code; `uses` and model edges stay the user's. Nodes outside the view are neither checked nor written.
 - **Graph**: one neutral format, JSON; displaying it is up to the user. Applied in order:
   1. Filters define the graph: `--tag` keeps and `--exclude-tag` drops nodes; `--via` keeps and `--exclude-via` drops edge kinds. Unlike `closure`, traversal cannot pass through what they remove.
   2. With `<node>`, a walk from it on what remains: up to `--dependencies` steps along edges and `--dependents` steps against them, each a number or `all` (default; `0` for none). Without `<node>`, every remaining node, and the depth options are refused.
